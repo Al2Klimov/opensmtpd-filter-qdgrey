@@ -22,11 +22,13 @@ func main() {
 	)
 
 	ignoreLvl := log.DebugLevel
+	sendersBySession := map[string]string{}
 
 	for in := bufio.NewReader(os.Stdin); ; {
 		switch line, err := in.ReadString('\n'); err {
 		case nil:
 			if line = strings.TrimRight(line, "\n"); line == "config|ready" {
+				fmt.Println("register|report|smtp-in|tx-mail")
 				fmt.Println("register|filter|smtp-in|rcpt-to")
 				fmt.Println("register|ready")
 				log.Info("Completed handshake")
@@ -41,17 +43,26 @@ func main() {
 							allowLvl = log.DebugLevel
 						}
 
-						log.WithFields(log.Fields{
-							"protocol":  tokens[1],
-							"timestamp": tokens[2],
-							"subsystem": tokens[3],
-							"phase":     tokens[4],
-							"session":   tokens[5],
-							"params":    tokens[7:],
-						}).Log(allowLvl, "Allowing filter input")
-
+						log.WithFields(tokens2fields(tokens, 7)).Log(allowLvl, "Allowing filter input")
 						fmt.Printf("filter-result|%s|%s|proceed\n", tokens[5], tokens[6])
 						continue
+					}
+				case "report":
+					if len(tokens) >= 6 && tokens[3] == "smtp-in" {
+						switch tokens[4] {
+						case "tx-mail":
+							if len(tokens) >= 9 {
+								if tokens[7] == "ok" {
+									sendersBySession[tokens[5]] = tokens[8]
+									log.WithFields(tokens2fields(tokens, 6)).Trace("Noted mail sender")
+								} else {
+									delete(sendersBySession, tokens[5])
+									log.WithFields(tokens2fields(tokens, 6)).Trace("GC-ed mail sender")
+								}
+
+								continue
+							}
+						}
 					}
 				}
 
@@ -63,5 +74,16 @@ func main() {
 		default:
 			log.WithError(err).Fatal("Couldn't read stdin")
 		}
+	}
+}
+
+func tokens2fields(tokens []string, paramsOffset int) log.Fields {
+	return log.Fields{
+		"protocol":  tokens[1],
+		"timestamp": tokens[2],
+		"subsystem": tokens[3],
+		"phase":     tokens[4],
+		"session":   tokens[5],
+		"params":    tokens[paramsOffset:],
 	}
 }
