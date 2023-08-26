@@ -21,6 +21,8 @@ func main() {
 		"For the terms of use, the source code and the authors see the projects this program is assembled from",
 	)
 
+	ignoreLvl := log.DebugLevel
+
 	for in := bufio.NewReader(os.Stdin); ; {
 		switch line, err := in.ReadString('\n'); err {
 		case nil:
@@ -28,6 +30,8 @@ func main() {
 				fmt.Println("register|filter|smtp-in|rcpt-to")
 				fmt.Println("register|ready")
 				log.Info("Completed handshake")
+
+				ignoreLvl = log.WarnLevel
 			} else {
 				switch tokens := strings.Split(line, "|"); tokens[0] {
 				case "filter":
@@ -46,7 +50,7 @@ func main() {
 					}
 				}
 
-				log.WithField("input", line).Debug("Ignoring input")
+				log.WithField("input", line).Log(ignoreLvl, "Ignoring input")
 			}
 		case io.EOF:
 			log.Info("End of stdin, terminating")
