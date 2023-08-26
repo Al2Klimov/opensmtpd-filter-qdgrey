@@ -29,6 +29,7 @@ func main() {
 		case nil:
 			if line = strings.TrimRight(line, "\n"); line == "config|ready" {
 				fmt.Println("register|report|smtp-in|tx-mail")
+				fmt.Println("register|report|smtp-in|link-disconnect")
 				fmt.Println("register|filter|smtp-in|rcpt-to")
 				fmt.Println("register|ready")
 				log.Info("Completed handshake")
@@ -62,6 +63,10 @@ func main() {
 
 								continue
 							}
+						case "link-disconnect":
+							delete(sendersBySession, tokens[5])
+							log.WithFields(tokens2fields(tokens, 6)).Trace("GC-ed mail sender")
+							continue
 						}
 					}
 				}
