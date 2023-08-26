@@ -9,6 +9,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
+	"strings"
 )
 
 func main() {
@@ -26,6 +27,8 @@ func main() {
 			if line == "config|ready\n" {
 				fmt.Println("register|ready")
 				log.Info("Completed handshake")
+			} else {
+				log.WithField("input", strings.TrimRight(line, "\n")).Debug("Ignoring input")
 			}
 		case io.EOF:
 			log.Info("End of stdin, terminating")
