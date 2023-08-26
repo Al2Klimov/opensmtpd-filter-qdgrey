@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+type tuple struct {
+	from, to string
+}
+
 func main() {
 	hardening()
 	log.SetOutput(os.Stderr)
@@ -23,6 +27,7 @@ func main() {
 
 	ignoreLvl := log.DebugLevel
 	sendersBySession := map[string]string{}
+	greylisted := map[tuple]struct{}{}
 
 	for in := bufio.NewReader(os.Stdin); ; {
 		switch line, err := in.ReadString('\n'); err {
@@ -39,12 +44,37 @@ func main() {
 				switch tokens := strings.Split(line, "|"); tokens[0] {
 				case "filter":
 					if len(tokens) >= 7 {
+						lf := log.WithFields(tokens2fields(tokens, 7))
 						allowLvl := log.WarnLevel
+
 						if tokens[3] == "smtp-in" && tokens[4] == "rcpt-to" {
-							allowLvl = log.DebugLevel
+							if sender, ok := sendersBySession[tokens[5]]; ok {
+								delete(sendersBySession, tokens[5])
+								lf.Trace("GC-ed mail sender")
+
+								if len(tokens) < 8 {
+									lf.Warn("Recipient missing")
+								} else {
+									tpl := tuple{sender, tokens[7]}
+									if _, ok := greylisted[tpl]; ok {
+										allowLvl = log.InfoLevel
+
+										delete(greylisted, tpl)
+										lf.Info("Grey-de-listed")
+									} else {
+										greylisted[tpl] = struct{}{}
+
+										lf.Info("Greylisted")
+										fmt.Printf("filter-result|%s|%s|reject|450 Greylisted\n", tokens[5], tokens[6])
+										continue
+									}
+								}
+							} else {
+								lf.Warn("Sender missing")
+							}
 						}
 
-						log.WithFields(tokens2fields(tokens, 7)).Log(allowLvl, "Allowing filter input")
+						lf.Log(allowLvl, "Allowing filter input")
 						fmt.Printf("filter-result|%s|%s|proceed\n", tokens[5], tokens[6])
 						continue
 					}
