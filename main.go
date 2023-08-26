@@ -24,11 +24,11 @@ func main() {
 	for in := bufio.NewReader(os.Stdin); ; {
 		switch line, err := in.ReadString('\n'); err {
 		case nil:
-			if line == "config|ready\n" {
+			if line = strings.TrimRight(line, "\n"); line == "config|ready" {
 				fmt.Println("register|ready")
 				log.Info("Completed handshake")
 			} else {
-				log.WithField("input", strings.TrimRight(line, "\n")).Debug("Ignoring input")
+				log.WithField("input", line).Debug("Ignoring input")
 			}
 		case io.EOF:
 			log.Info("End of stdin, terminating")
