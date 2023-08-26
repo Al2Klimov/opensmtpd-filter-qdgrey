@@ -9,6 +9,7 @@ import (
 )
 
 func main() {
+	hardening()
 	log.SetOutput(os.Stderr)
 	log.SetLevel(log.TraceLevel)
 
