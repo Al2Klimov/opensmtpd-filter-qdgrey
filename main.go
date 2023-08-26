@@ -4,6 +4,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/Al2Klimov/go-gen-source-repos"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -22,8 +23,10 @@ func main() {
 	for in := bufio.NewReader(os.Stdin); ; {
 		switch line, err := in.ReadString('\n'); err {
 		case nil:
-			// TODO
-			_ = line
+			if line == "config|ready\n" {
+				fmt.Println("register|ready")
+				log.Info("Completed handshake")
+			}
 		case io.EOF:
 			log.Info("End of stdin, terminating")
 			return
