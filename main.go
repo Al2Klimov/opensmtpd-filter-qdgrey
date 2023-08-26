@@ -36,6 +36,11 @@ func main() {
 				switch tokens := strings.Split(line, "|"); tokens[0] {
 				case "filter":
 					if len(tokens) >= 7 {
+						allowLvl := log.WarnLevel
+						if tokens[3] == "smtp-in" && tokens[4] == "rcpt-to" {
+							allowLvl = log.DebugLevel
+						}
+
 						log.WithFields(log.Fields{
 							"protocol":  tokens[1],
 							"timestamp": tokens[2],
@@ -43,7 +48,7 @@ func main() {
 							"phase":     tokens[4],
 							"session":   tokens[5],
 							"params":    tokens[7:],
-						}).Trace("Allowing filter input")
+						}).Log(allowLvl, "Allowing filter input")
 
 						fmt.Printf("filter-result|%s|%s|proceed\n", tokens[5], tokens[6])
 						continue
