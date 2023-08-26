@@ -25,9 +25,27 @@ func main() {
 		switch line, err := in.ReadString('\n'); err {
 		case nil:
 			if line = strings.TrimRight(line, "\n"); line == "config|ready" {
+				fmt.Println("register|filter|smtp-in|rcpt-to")
 				fmt.Println("register|ready")
 				log.Info("Completed handshake")
 			} else {
+				switch tokens := strings.Split(line, "|"); tokens[0] {
+				case "filter":
+					if len(tokens) >= 7 {
+						log.WithFields(log.Fields{
+							"protocol":  tokens[1],
+							"timestamp": tokens[2],
+							"subsystem": tokens[3],
+							"phase":     tokens[4],
+							"session":   tokens[5],
+							"params":    tokens[7:],
+						}).Trace("Allowing filter input")
+
+						fmt.Printf("filter-result|%s|%s|proceed\n", tokens[5], tokens[6])
+						continue
+					}
+				}
+
 				log.WithField("input", line).Debug("Ignoring input")
 			}
 		case io.EOF:
