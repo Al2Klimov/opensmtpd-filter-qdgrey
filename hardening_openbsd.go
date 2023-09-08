@@ -5,8 +5,25 @@ package main
 
 import "golang.org/x/sys/unix"
 
-func hardening() {
-	if err := unix.PledgePromises("stdio tty"); err != nil {
+func hardening(tcp bool, sock string) {
+	promises := "stdio tty"
+	if tcp {
+		promises += " dns inet"
+	}
+
+	if sock != "" {
+		if err := unix.Unveil(sock, "rw"); err != nil {
+			panic(err)
+		}
+
+		if err := unix.UnveilBlock(); err != nil {
+			panic(err)
+		}
+
+		promises += " unix"
+	}
+
+	if err := unix.PledgePromises(promises); err != nil {
 		panic(err)
 	}
 }

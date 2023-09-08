@@ -4,20 +4,42 @@ package main
 
 import (
 	"bufio"
+	"context"
+	"crypto/sha256"
+	_ "embed"
+	"encoding/base64"
+	"flag"
 	"fmt"
 	"github.com/Al2Klimov/go-gen-source-repos"
+	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
 	"io"
 	"os"
 	"strings"
 )
 
-type tuple struct {
-	from, to string
-}
+//go:embed redis.lua
+var redisLua string
+
+var redisScript = redis.NewScript(redisLua)
 
 func main() {
-	hardening()
+	addr := flag.String("redis", "", "HOST:PORT|/SOCKET")
+	flag.Parse()
+
+	rds := redis.NewClient(&redis.Options{Addr: *addr})
+	opts := rds.Options()
+	tcp := false
+	sock := ""
+
+	switch opts.Network {
+	case "tcp":
+		tcp = true
+	case "unix":
+		sock = opts.Addr
+	}
+
+	hardening(tcp, sock)
 	log.SetOutput(os.Stderr)
 	log.SetLevel(log.TraceLevel)
 
@@ -27,7 +49,6 @@ func main() {
 
 	ignoreLvl := log.DebugLevel
 	sendersBySession := map[string]string{}
-	greylisted := map[tuple]struct{}{}
 
 	for in := bufio.NewReader(os.Stdin); ; {
 		switch line, err := in.ReadString('\n'); err {
@@ -55,18 +76,42 @@ func main() {
 								if len(tokens) < 8 {
 									lf.Warn("Recipient missing")
 								} else {
-									tpl := tuple{sender, tokens[7]}
-									if _, ok := greylisted[tpl]; ok {
-										allowLvl = log.InfoLevel
+									sb := &strings.Builder{}
+									b64 := base64.NewEncoder(base64.RawURLEncoding, sb)
+									h := sha256.New()
 
-										delete(greylisted, tpl)
-										lf.Info("Grey-de-listed")
+									_, _ = io.WriteString(h, sender)
+									_, _ = io.WriteString(h, "\n")
+									_, _ = io.WriteString(h, tokens[7])
+
+									sb.WriteString("opensmtpd-filter-qdgrey{")
+									_, _ = b64.Write(h.Sum(nil))
+									_ = b64.Close()
+									sb.WriteByte('}')
+
+									cmd := redisScript.Run(
+										context.Background(),
+										rds,
+										[]string{sb.String() + "grey", sb.String() + "white"},
+									)
+
+									if i, err := cmd.Int(); err == nil {
+										switch i {
+										case 0:
+											lf.Info("Greylisted")
+										case 1:
+											lf.Info("Still greylisted")
+										default:
+											allowLvl = log.InfoLevel
+										}
+
+										switch i {
+										case 0, 1:
+											fmt.Printf("filter-result|%s|%s|reject|450 Greylisted\n", tokens[5], tokens[6])
+											continue
+										}
 									} else {
-										greylisted[tpl] = struct{}{}
-
-										lf.Info("Greylisted")
-										fmt.Printf("filter-result|%s|%s|reject|450 Greylisted\n", tokens[5], tokens[6])
-										continue
+										lf = lf.WithError(err)
 									}
 								}
 							} else {

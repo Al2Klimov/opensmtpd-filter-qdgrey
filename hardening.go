@@ -5,5 +5,5 @@ package main
 
 import _ "golang.org/x/sys/unix"
 
-func hardening() {
+func hardening(bool, string) {
 }
