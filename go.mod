@@ -9,7 +9,7 @@ require (
 
 require (
 	github.com/redis/go-redis/v9 v9.1.0
-	golang.org/x/sys v0.11.0
+	golang.org/x/sys v0.12.0
 )
 
 require (
