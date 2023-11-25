@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//go:build !js && !openbsd
+//go:build !js && !wasip1 && !openbsd
 
 package main
 
