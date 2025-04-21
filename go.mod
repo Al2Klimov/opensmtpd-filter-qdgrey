@@ -1,6 +1,6 @@
 module github.com/Al2Klimov/opensmtpd-filter-qdgrey
 
-go 1.20
+go 1.23.0
 
 require (
 	github.com/Al2Klimov/go-gen-source-repos v0.2.0
