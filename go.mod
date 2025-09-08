@@ -1,6 +1,6 @@
 module github.com/Al2Klimov/opensmtpd-filter-qdgrey
 
-go 1.23.0
+go 1.24.0
 
 require (
 	github.com/Al2Klimov/go-gen-source-repos v0.2.0
@@ -9,7 +9,7 @@ require (
 
 require (
 	github.com/redis/go-redis/v9 v9.13.0
-	golang.org/x/sys v0.35.0
+	golang.org/x/sys v0.36.0
 )
 
 require (
