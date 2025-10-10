@@ -16,7 +16,9 @@ jobs:
       fail-fast: false
       matrix:
         go:
-          - 23
+          # NixOS 25.05
+          # OpenBSD 7.7
+          - 24
 
     steps:
       - uses: actions/checkout@v4
