@@ -3,22 +3,50 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use std::io::{BufRead, stdin};
+use std::io::{self, BufRead, Write, stdin, stdout};
+use std::process::exit;
 
 const REDIS_LUA: &str = include_str!("../redis.lua");
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let mut redis_addr = String::new();
-    let mut i = 1;
-    while i < args.len() {
-        if args[i] == "-redis" && i + 1 < args.len() {
-            redis_addr = args[i + 1].clone();
-            i += 2;
-        } else {
-            i += 1;
+fn main() -> io::Result<()> {
+    let mut args = std::env::args();
+    args.next();
+
+    let mut redis_addr: Option<String> = None;
+
+    loop {
+        match args.next().as_deref() {
+            None => break,
+            Some("-h") | Some("--help") => {
+                writeln!(
+                    stdout().lock(),
+                    "Usage: opensmtpd-filter-qdgrey -redis HOST:PORT|/SOCKET"
+                )?;
+                return Ok(());
+            }
+            Some("-redis") => match args.next() {
+                None => {
+                    eprintln!("Flag needs an argument: -redis");
+                    exit(1);
+                }
+                Some(addr) => {
+                    redis_addr = Some(addr);
+                }
+            },
+            Some(arg) => {
+                eprintln!("Unknown argument: {}", arg);
+                exit(1);
+            }
         }
     }
+
+    let redis_addr = match redis_addr {
+        Some(addr) => addr,
+        None => {
+            eprintln!("Missing required flag: -redis");
+            exit(1);
+        }
+    };
 
     let redis_url = if redis_addr.starts_with('/') {
         format!("redis+unix://{}", redis_addr)
@@ -26,88 +54,136 @@ fn main() {
         format!("redis://{}", redis_addr)
     };
 
-    let client = redis::Client::open(redis_url).expect("Failed to create Redis client");
-    let mut con = client.get_connection().expect("Failed to connect to Redis");
+    let client = match redis::Client::open(redis_url) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to create Redis client: {}", e);
+            exit(1);
+        }
+    };
+
+    let mut con = match client.get_connection() {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to connect to Redis: {}", e);
+            exit(1);
+        }
+    };
+
     let script = redis::Script::new(REDIS_LUA);
 
-    let stdin = stdin();
-    let mut senders: HashMap<String, String> = HashMap::new();
+    let mut std_in = stdin().lock();
+    let mut std_out = stdout().lock();
+    let mut line = Vec::<u8>::new();
+    let mut senders: HashMap<Vec<u8>, Vec<u8>> = HashMap::new();
 
-    for line_result in stdin.lock().lines() {
-        let line = match line_result {
-            Ok(l) => l,
-            Err(e) => {
-                eprintln!("Error reading stdin: {}", e);
-                return;
-            }
-        };
+    loop {
+        line.clear();
+        std_in.read_until(b'\n', &mut line)?;
 
-        if line == "config|ready" {
-            println!("register|report|smtp-in|tx-mail");
-            println!("register|report|smtp-in|link-disconnect");
-            println!("register|filter|smtp-in|rcpt-to");
-            println!("register|ready");
-        } else {
-            let tokens: Vec<&str> = line.split('|').collect();
-            match tokens.first().copied() {
-                Some("filter") if tokens.len() >= 7 => {
-                    let session = tokens[5];
-                    let token = tokens[6];
-                    let mut reject = false;
+        if line.is_empty() {
+            return Ok(());
+        }
 
-                    if tokens[3] == "smtp-in" && tokens[4] == "rcpt-to" {
-                        if let Some(sender) = senders.remove(session) {
-                            if tokens.len() >= 8 {
-                                let recipient = tokens[7];
-                                let mut hasher = Sha256::new();
-                                hasher.update(sender.as_bytes());
-                                hasher.update(b"\n");
-                                hasher.update(recipient.as_bytes());
-                                let hash = hasher.finalize();
-                                let encoded = URL_SAFE_NO_PAD.encode(hash);
-                                let key_prefix = format!("opensmtpd-filter-qdgrey{{{}}}", encoded);
-                                let grey_key = format!("{}grey", key_prefix);
-                                let white_key = format!("{}white", key_prefix);
+        while line
+            .pop_if(|last| match last {
+                b'\r' => true,
+                b'\n' => true,
+                _ => false,
+            })
+            .is_some()
+        {}
 
-                                match script
-                                    .key(&grey_key)
-                                    .key(&white_key)
-                                    .invoke::<i64>(&mut con)
-                                {
-                                    Ok(result) if result <= 1 => {
-                                        reject = true;
-                                    }
-                                    Ok(_) => {}
-                                    Err(e) => {
-                                        eprintln!("Redis error: {}", e);
-                                    }
+        let mut fields = line.split(|&sep| sep == b'|');
+
+        match fields.next() {
+            Some(b"config") => match fields.next() {
+                Some(b"ready") => {
+                    writeln!(std_out, "register|report|smtp-in|tx-mail")?;
+                    writeln!(std_out, "register|report|smtp-in|link-disconnect")?;
+                    writeln!(std_out, "register|filter|smtp-in|rcpt-to")?;
+                    writeln!(std_out, "register|ready")?;
+                }
+                _ => {}
+            },
+            Some(b"report") => {
+                fields.next(); // protocol version
+                fields.next(); // timestamp
+                fields.next(); // subsystem
+
+                match (fields.next(), fields.next()) {
+                    (Some(b"tx-mail"), Some(session)) => {
+                        fields.next(); // message id
+                        match fields.next() {
+                            Some(b"ok") => match fields.next() {
+                                Some(sender) => {
+                                    senders.insert(session.to_owned(), sender.to_owned());
                                 }
+                                _ => {}
+                            },
+                            _ => {
+                                senders.remove(session);
                             }
                         }
                     }
-
-                    if reject {
-                        println!("filter-result|{}|{}|reject|450 Greylisted", session, token);
-                    } else {
-                        println!("filter-result|{}|{}|proceed", session, token);
-                    }
-                }
-                Some("report") if tokens.len() >= 6 && tokens[3] == "smtp-in" => match tokens[4] {
-                    "tx-mail" if tokens.len() >= 9 => {
-                        let session = tokens[5];
-                        if tokens[7] == "ok" {
-                            senders.insert(session.to_owned(), tokens[8].to_owned());
-                        } else {
-                            senders.remove(session);
-                        }
-                    }
-                    "link-disconnect" => {
-                        senders.remove(tokens[5]);
+                    (Some(b"link-disconnect"), Some(session)) => {
+                        senders.remove(session);
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
+            Some(b"filter") => {
+                fields.next(); // protocol version
+                fields.next(); // timestamp
+                fields.next(); // subsystem
+
+                match (fields.next(), fields.next(), fields.next()) {
+                    (Some(b"rcpt-to"), Some(session), Some(token)) => {
+                        let reject = match senders.remove(session) {
+                            Some(sender) => match fields.next() {
+                                Some(recipient) => {
+                                    let mut hasher = Sha256::new();
+                                    hasher.update(&sender);
+                                    hasher.update(b"\n");
+                                    hasher.update(recipient);
+                                    let hash = hasher.finalize();
+                                    let encoded = URL_SAFE_NO_PAD.encode(hash);
+                                    let key_prefix =
+                                        format!("opensmtpd-filter-qdgrey{{{}}}", encoded);
+                                    let grey_key = format!("{}grey", key_prefix);
+                                    let white_key = format!("{}white", key_prefix);
+
+                                    match script
+                                        .key(&grey_key)
+                                        .key(&white_key)
+                                        .invoke::<i64>(&mut con)
+                                    {
+                                        Ok(result) => result <= 1,
+                                        Err(e) => {
+                                            eprintln!("Redis error: {}", e);
+                                            false
+                                        }
+                                    }
+                                }
+                                None => false,
+                            },
+                            None => false,
+                        };
+
+                        std_out.write_all(b"filter-result|")?;
+                        std_out.write_all(session)?;
+                        std_out.write_all(b"|")?;
+                        std_out.write_all(token)?;
+                        if reject {
+                            writeln!(std_out, "|reject|450 Greylisted")?;
+                        } else {
+                            writeln!(std_out, "|proceed")?;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
         }
     }
 }
