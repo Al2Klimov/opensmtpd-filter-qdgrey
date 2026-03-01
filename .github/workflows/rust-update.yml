@@ -68,8 +68,5 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - run: cargo build --verbose
-        shell: bash
-
       - run: cargo test --verbose -- --test-threads=1
         shell: bash

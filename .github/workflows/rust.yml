@@ -75,8 +75,5 @@ jobs:
         with:
           toolchain: ${{ steps.rust-version.outputs.value }}
 
-      - run: cargo build --verbose
-        shell: bash
-
       - run: cargo test --verbose -- --test-threads=1
         shell: bash
