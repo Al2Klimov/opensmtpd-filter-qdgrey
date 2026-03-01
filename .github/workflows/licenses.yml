@@ -1,0 +1,29 @@
+name: Licenses
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/licenses.yml
+      - Cargo.*
+      - deny.toml
+      - LICENSE.md
+  pull_request:
+    paths:
+      - .github/workflows/licenses.yml
+      - Cargo.*
+      - deny.toml
+      - LICENSE.md
+
+jobs:
+  Licenses:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses

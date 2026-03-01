@@ -31,11 +31,15 @@ Ignore the MTA IP, just greylist a message by sender and recipient.
 
 ## Usage
 
-Build the source code like any other program written in Golang.
+Build the source code with Cargo:
+
+```
+cargo build -r
+```
 
 The resulting executable communicates with smtpd(8) as per smtpd-filters(7).
 Search in smtpd.conf(5) for "proc-exec" on how to integrate it.
 
 Also run a Redis server, either on its default port and on the same machine
 as OpenSMTPd or tell opensmtpd-filter-qdgrey how to connect
-to your Redis instance (see `go run . -h`).
+to your Redis instance (see `opensmtpd-filter-qdgrey -h`).

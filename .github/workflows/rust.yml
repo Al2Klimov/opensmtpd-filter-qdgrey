@@ -1,0 +1,79 @@
+name: Rust
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/rust.yml
+      - Cargo.*
+      - src/**
+      - tests/**
+  pull_request:
+    paths:
+      - .github/workflows/rust.yml
+      - Cargo.*
+      - src/**
+      - tests/**
+  workflow_dispatch: { }
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: rust-version
+        run: echo "value=$(grep '^rust-version' Cargo.toml | sed 's/.*"\([^"]*\)".*/\1/')" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ steps.rust-version.outputs.value }}
+
+      - run: cargo build --verbose
+        shell: bash
+
+  Test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: rust-version
+        run: echo "value=$(grep '^rust-version' Cargo.toml | sed 's/.*"\([^"]*\)".*/\1/')" >> "$GITHUB_OUTPUT"
+        shell: bash
+
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ steps.rust-version.outputs.value }}
+
+      - run: cargo test --verbose -- --test-threads=1
+        shell: bash
