@@ -1,0 +1,72 @@
+name: Rust update
+
+on:
+  schedule:
+    - cron: '42 23 * * 0'
+  workflow_dispatch: { }
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  Build:
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+
+    steps:
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: actions/checkout@v4
+
+      - run: cargo build --verbose
+        shell: bash
+
+  Test:
+    strategy:
+      fail-fast: false
+      matrix:
+        rust:
+          - stable
+          - beta
+          - nightly
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+
+      - uses: actions/checkout@v4
+
+      - run: cargo test --verbose -- --test-threads=1
+        shell: bash

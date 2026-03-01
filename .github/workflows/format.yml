@@ -1,0 +1,28 @@
+name: Format
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - .github/workflows/format.yml
+      - src/**
+      - tests/**
+  pull_request:
+    paths:
+      - .github/workflows/format.yml
+      - src/**
+      - tests/**
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  Format:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo fmt --check

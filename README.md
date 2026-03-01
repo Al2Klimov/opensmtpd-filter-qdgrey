@@ -29,13 +29,21 @@ Theoretically. But no one has to publish such.
 The quick and dirty workaround of opensmtpd-filter-qdgrey is simple:
 Ignore the MTA IP, just greylist a message by sender and recipient.
 
+## Build
+
+Compile like any other Rust program: `cargo build -r`
+
+Find the resulting binary directly under `target/release/`.
+
 ## Usage
 
-Build the source code like any other program written in Golang.
+Integrate this filter into smtpd.conf(5). Search in smtpd.conf(5) for "proc-exec" on how to do so.
 
-The resulting executable communicates with smtpd(8) as per smtpd-filters(7).
-Search in smtpd.conf(5) for "proc-exec" on how to integrate it.
+### Command-line interface
 
-Also run a Redis server, either on its default port and on the same machine
-as OpenSMTPd or tell opensmtpd-filter-qdgrey how to connect
-to your Redis instance (see `go run . -h`).
+```
+opensmtpd-filter-qdgrey -redis HOST:PORT|/SOCKET
+```
+
+Connect to your Redis instance by providing its address via `-redis HOST:PORT` for TCP
+or `-redis /SOCKET` for a Unix socket. Redis is required for greylisting state storage.

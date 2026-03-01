@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+[package]
+name = "opensmtpd-filter-qdgrey"
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.86.0" # NixOS 25.05, OpenBSD 7.7
+license = "GPL-3.0"
+authors = ["Alexander A. Klimov <a@kli.mov>"]
+
+[dependencies]
+base64 = "0.22"
+redis = "0.27"
+sha2 = "0.10"
