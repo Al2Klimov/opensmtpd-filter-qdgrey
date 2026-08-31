@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/Al2Klimov/go-gen-source-repos v0.2.0
-	github.com/sirupsen/logrus v1.10.1
+	github.com/sirupsen/logrus v1.10.2
 )
 
 require (
